@@ -1,0 +1,19 @@
+{
+  "name": "mindflow",
+  "version": "1.0.0",
+  "description": "MindFlow - 一个现代化的网页思维导图应用",
+  "main": "mindmap.html",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "open": "start mindmap.html"
+  },
+  "keywords": [
+    "mindmap",
+    "思维导图",
+    "xmind",
+    "visualization"
+  ],
+  "author": "",
+  "license": "MIT"
+}

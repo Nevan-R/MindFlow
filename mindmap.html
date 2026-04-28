@@ -1,0 +1,226 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindFlow - 思维导图</title>
+        <link rel="stylesheet" href="./styles.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- 椤堕儴宸ュ叿鏍?-->
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <div class="logo">
+                    <div class="logo-icon">🧠</div>
+                    <span>MindFlow</span>
+                </div>
+                <div class="toolbar-group">
+                    <button class="toolbar-btn primary" onclick="mindMap.addChildNode()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="16" />
+                            <line x1="8" y1="12" x2="16" y2="12" />
+                        </svg>
+                        添加子节点
+                    </button>
+                    <button class="toolbar-btn" onclick="mindMap.addSiblingNode()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <line x1="12" y1="8" x2="12" y2="16" />
+                            <line x1="8" y1="12" x2="16" y2="12" />
+                        </svg>
+                        添加兄弟节点
+                    </button>
+                    <button class="toolbar-btn danger" onclick="mindMap.deleteNode()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                        删除
+                    </button>
+                    <button class="toolbar-btn" onclick="mindMap.deleteSelectedLink()" id="deleteLinkBtn"
+                        style="display:none">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                        删除关联
+                    </button>
+                </div>
+                <div class="toolbar-group">
+                    <button class="toolbar-btn" onclick="mindMap.expandAll()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path
+                                d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                        </svg>
+                        全部展开
+                    </button>
+                    <button class="toolbar-btn" onclick="mindMap.collapseAll()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path
+                                d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+                        </svg>
+                        全部折叠
+                    </button>
+                    <button class="toolbar-btn" onclick="mindMap.resetAllNodePositions()" title="重置所有节点位置">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                            <path d="M3 3v5h5" />
+                        </svg>
+                        重置布局
+                    </button>
+                </div>
+            </div>
+            <div class="toolbar-group">
+                <button class="toolbar-btn" onclick="mindMap.exportJSON()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    导出
+                </button>
+                <button class="toolbar-btn" onclick="document.getElementById('fileInput').click()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    导入
+                </button>
+                <input type="file" id="fileInput" accept=".json" onchange="mindMap.importJSON(event)">
+            </div>
+        </div>
+
+        <!-- 鐢诲竷瀹瑰櫒 -->
+        <div class="canvas-container" id="canvasContainer">
+            <div class="grid"></div>
+            <div id="canvas">
+                <svg class="connections" id="connections">
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+                        </linearGradient>
+                        <!-- 绠ご鏍囪 -->
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#06b6d4" />
+                        </marker>
+                        <marker id="arrowhead-selected" markerWidth="10" markerHeight="7" refX="9" refY="3.5"
+                            orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#ec4899" />
+                        </marker>
+                    </defs>
+                </svg>
+                <div id="nodes"></div>
+            </div>
+        </div>
+
+        <!-- 搴曢儴鎺у埗鏍?-->
+        <div class="bottom-controls">
+            <div class="control-group">
+                <button class="control-btn" onclick="mindMap.zoomOut()" title="缩小">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        <line x1="8" y1="11" x2="14" y2="11" />
+                    </svg>
+                </button>
+                <div class="zoom-display" id="zoomLevel">100%</div>
+                <button class="control-btn" onclick="mindMap.zoomIn()" title="放大">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        <line x1="11" y1="8" x2="11" y2="14" />
+                        <line x1="8" y1="11" x2="14" y2="11" />
+                    </svg>
+                </button>
+                <button class="control-btn" onclick="mindMap.resetView()" title="重置视图">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 閫変腑淇℃伅 -->
+        <div class="selection-info" id="selectionInfo">
+            已选择: <span id="selectedText">中心主题</span>
+        </div>
+
+        <!-- 甯姪鎸夐挳 -->
+        <button class="help-btn" id="helpBtn" onclick="toggleShortcuts()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+        </button>
+
+        <!-- 蹇嵎閿潰鏉?-->
+        <div class="shortcuts-panel" id="shortcutsPanel">
+            <div class="shortcuts-header">
+                <span class="shortcuts-title">⌨️ 快捷键</span>
+                <button class="shortcuts-close" onclick="toggleShortcuts()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="shortcuts-list">
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">添加子节点</span>
+                    <div class="shortcut-key"><kbd>Tab</kbd></div>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">添加兄弟节点</span>
+                    <div class="shortcut-key"><kbd>Enter</kbd></div>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">删除节点</span>
+                    <div class="shortcut-key"><kbd>Delete</kbd></div>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">编辑节点</span>
+                    <div class="shortcut-key"><kbd>F2</kbd></div>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">平移画布</span>
+                    <div class="shortcut-key"><kbd>Space</kbd>+<kbd>拖拽</kbd></div>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">缩放画布</span>
+                    <div class="shortcut-key"><kbd>Ctrl</kbd>+<kbd>滚轮</kbd></div>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">拖动节点</span>
+                    <div class="shortcut-key"><kbd>拖拽</kbd></div>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">锁定/解锁位置</span>
+                    <div class="shortcut-key"><kbd>Ctrl</kbd>+<kbd>L</kbd></div>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">重置所有位置</span>
+                    <div class="shortcut-key"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></div>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-desc">导出文件</span>
+                    <div class="shortcut-key"><kbd>Ctrl</kbd>+<kbd>S</kbd></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 鎻愮ず娑堟伅 -->
+        <div class="toast" id="toast"></div>
+    </div>
+
+        <script src="./app.js"></script>
+</body>
+
+</html>

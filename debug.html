@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Debug</title>
+    <style>
+        body { background: #0f172a; color: white; font-family: sans-serif; padding: 20px; }
+        #log { white-space: pre-wrap; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>Debug Log</h1>
+    <div id="log"></div>
+    <script>
+        const log = (msg) => {
+            document.getElementById('log').textContent += msg + '\n';
+            console.log(msg);
+        };
+        
+        log('Script started');
+        
+        // Test basic DOM
+        log('DOM loaded: ' + (document.readyState === 'complete' || document.readyState === 'interactive'));
+        
+        // Test if elements exist
+        log('canvas: ' + !!document.getElementById('canvas'));
+        log('nodes: ' + !!document.getElementById('nodes'));
+        log('canvasContainer: ' + !!document.getElementById('canvasContainer'));
+        
+        // Test Set
+        const lockedNodes = new Set();
+        lockedNodes.add(1);
+        log('Set works: ' + lockedNodes.has(1));
+        
+        log('All tests passed');
+    </script>
+</body>
+</html>
