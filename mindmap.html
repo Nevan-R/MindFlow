@@ -18,7 +18,7 @@
                     <span>MindFlow</span>
                 </div>
                 <div class="toolbar-group">
-                    <button class="toolbar-btn primary" onclick="mindMap.addChildNode()">
+                    <button class="toolbar-btn primary edit-only" onclick="mindMap.addChildNode()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10" />
                             <line x1="12" y1="8" x2="12" y2="16" />
@@ -26,7 +26,7 @@
                         </svg>
                         添加子节点
                     </button>
-                    <button class="toolbar-btn" onclick="mindMap.addSiblingNode()">
+                    <button class="toolbar-btn edit-only" onclick="mindMap.addSiblingNode()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="18" height="18" rx="2" />
                             <line x1="12" y1="8" x2="12" y2="16" />
@@ -34,14 +34,14 @@
                         </svg>
                         添加兄弟节点
                     </button>
-                    <button class="toolbar-btn danger" onclick="mindMap.deleteNode()">
+                    <button class="toolbar-btn danger edit-only" onclick="mindMap.deleteNode()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="3 6 5 6 21 6" />
                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                         </svg>
                         删除
                     </button>
-                    <button class="toolbar-btn" onclick="mindMap.deleteSelectedLink()" id="deleteLinkBtn"
+                    <button class="toolbar-btn edit-only" onclick="mindMap.deleteSelectedLink()" id="deleteLinkBtn"
                         style="display:none">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18" />
@@ -65,25 +65,47 @@
                         </svg>
                         全部折叠
                     </button>
-                    <button class="toolbar-btn" onclick="mindMap.resetAllNodePositions()" title="重置所有节点位置">
+                    <button class="toolbar-btn edit-only" onclick="mindMap.autoAlign()" title="自动对齐节点">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                            <path d="M3 3v5h5" />
+                            <path d="M3 6h18" />
+                            <path d="M3 12h18" />
+                            <path d="M3 18h18" />
                         </svg>
-                        重置布局
+                        自动对齐
+                    </button>
+                    <button class="toolbar-btn" onclick="mindMap.setMode('read')" id="modeReadBtn" title="阅读模式">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        阅读模式
+                    </button>
+                    <button class="toolbar-btn" onclick="mindMap.setMode('edit')" id="modeEditBtn" title="编辑模式">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                        </svg>
+                        编辑模式
                     </button>
                 </div>
             </div>
             <div class="toolbar-group">
-                <button class="toolbar-btn" onclick="mindMap.exportJSON()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    导出
-                </button>
-                <button class="toolbar-btn" onclick="document.getElementById('fileInput').click()">
+                <div class="export-dropdown">
+                    <button class="toolbar-btn" onclick="toggleExportMenu()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        导出
+                    </button>
+                    <div class="export-menu" id="exportMenu">
+                        <button class="export-menu-item" onclick="mindMap.exportJSON(); hideExportMenu()">导出 JSON</button>
+                        <button class="export-menu-item" onclick="mindMap.exportImage('png'); hideExportMenu()">导出 PNG</button>
+                        <button class="export-menu-item" onclick="mindMap.exportImage('jpeg'); hideExportMenu()">导出 JPEG</button>
+                    </div>
+                </div>
+                <button class="toolbar-btn edit-only" onclick="document.getElementById('fileInput').click()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="17 8 12 3 7 8" />
@@ -202,12 +224,12 @@
                     <div class="shortcut-key"><kbd>拖拽</kbd></div>
                 </div>
                 <div class="shortcut-item">
-                    <span class="shortcut-desc">锁定/解锁位置</span>
-                    <div class="shortcut-key"><kbd>Ctrl</kbd>+<kbd>L</kbd></div>
+                    <span class="shortcut-desc">切换阅读模式</span>
+                    <div class="shortcut-key"><kbd>Ctrl</kbd>+<kbd>1</kbd></div>
                 </div>
                 <div class="shortcut-item">
-                    <span class="shortcut-desc">重置所有位置</span>
-                    <div class="shortcut-key"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></div>
+                    <span class="shortcut-desc">切换编辑模式</span>
+                    <div class="shortcut-key"><kbd>Ctrl</kbd>+<kbd>2</kbd></div>
                 </div>
                 <div class="shortcut-item">
                     <span class="shortcut-desc">导出文件</span>

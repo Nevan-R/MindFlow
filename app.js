@@ -43,10 +43,12 @@
 
         // ==================== NodeLink 绫伙紙鑺傜偣鍏宠仈锛?====================
         class NodeLink {
-            constructor(id, sourceId, targetId) {
+            constructor(id, sourceId, targetId, sourceSide = 'right', targetSide = 'left') {
                 this.id = id;
                 this.sourceId = sourceId;
                 this.targetId = targetId;
+                this.sourceSide = sourceSide;
+                this.targetSide = targetSide;
             }
         }
 
@@ -68,6 +70,7 @@
                 this.selectedLink = null;
                 this.isDraggingLink = false;
                 this.dragLinkSource = null;
+                this.dragLinkSourceSide = 'right';
                 this.dragLinkStartPos = null;
                 this.dragLinkCurrentPos = null;
 
@@ -78,7 +81,7 @@
                 this.dragNodeStartY = 0;
                 this.dragNodeOffsetX = 0;
                 this.dragNodeOffsetY = 0;
-                this.lockedNodes = new Set(); // 瀛樺偍浣嶇疆琚攣瀹氱殑鑺傜偣ID
+                this.mode = 'edit';
 
                 // 瑙嗗浘鐘舵€?
                 this.scale = 1;
@@ -96,6 +99,7 @@
                 this.NODE_VERTICAL_GAP = 24;
                 this.NODE_MIN_WIDTH = 100;
                 this.CANVAS_OFFSET = 5000;
+                this.AUTO_NEW_NODE_OFFSET_Y = 68;
 
                 // DOM 鍏冪礌
                 this.canvas = document.getElementById('canvas');
@@ -107,6 +111,8 @@
                 this.selectedTextEl = document.getElementById('selectedText');
                 this.toastEl = document.getElementById('toast');
                 this.deleteLinkBtn = document.getElementById('deleteLinkBtn');
+                this.modeReadBtn = document.getElementById('modeReadBtn');
+                this.modeEditBtn = document.getElementById('modeEditBtn');
 
                 this.init();
             }
@@ -128,9 +134,22 @@
 
                 // 缁戝畾浜嬩欢
                 this.bindEvents();
+                this.setMode('edit');
 
                 // 鏄剧ず娆㈣繋鎻愮ず
                 this.showToast('欢迎使用 MindFlow，按 ? 查看快捷键');
+            }
+
+            isReadMode() {
+                return this.mode === 'read';
+            }
+
+            setMode(mode) {
+                this.mode = mode === 'read' ? 'read' : 'edit';
+                document.body.classList.toggle('read-mode', this.isReadMode());
+                if (this.modeReadBtn) this.modeReadBtn.classList.toggle('active', this.isReadMode());
+                if (this.modeEditBtn) this.modeEditBtn.classList.toggle('active', !this.isReadMode());
+                this.showToast(this.isReadMode() ? '已切换到阅读模式' : '已切换到编辑模式');
             }
 
             createSampleData() {
@@ -201,12 +220,9 @@
 
                     let currentY = node.y - totalHeight / 2;
                     for (const child of node.children) {
-                        // 濡傛灉鑺傜偣浣嶇疆琚攣瀹氾紝涓嶉噸鏂拌绠楀叾浣嶇疆
-                        if (!this.lockedNodes.has(child.id)) {
-                            const childHeight = this.getSubtreeHeight(child);
-                            child.x = node.x + node.width + this.NODE_HORIZONTAL_GAP;
-                            child.y = currentY + childHeight / 2;
-                        }
+                        const childHeight = this.getSubtreeHeight(child);
+                        child.x = node.x + node.width + this.NODE_HORIZONTAL_GAP;
+                        child.y = currentY + childHeight / 2;
                         currentY += this.getSubtreeHeight(child) + this.NODE_VERTICAL_GAP;
 
                         this.calculatePositions(child);
@@ -244,20 +260,6 @@
                 const nodeEl = this.createNodeElement(node);
                 container.appendChild(nodeEl);
 
-                if (node.children.length > 0) {
-                    const expandBtn = document.createElement('div');
-                    expandBtn.className = 'expand-btn';
-                    expandBtn.textContent = node.expanded ? '-' : '+';
-                    // 灞曞紑鎸夐挳浣嶇疆锛氳妭鐐瑰彸渚ц竟缂?
-                    expandBtn.style.left = (node.x + node.width / 2 - 9) + 'px';
-                    expandBtn.style.top = (node.y - 9) + 'px';
-                    expandBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        this.toggleNode(node);
-                    };
-                    container.appendChild(expandBtn);
-                }
-
                 if (node.expanded) {
                     for (const child of node.children) {
                         this.renderNodeRecursive(child, container);
@@ -269,8 +271,7 @@
                 const el = document.createElement('div');
                 el.className = 'node' +
                     (node === this.rootNode ? ' root' : '') +
-                    (node === this.selectedNode ? ' selected' : '') +
-                    (this.lockedNodes.has(node.id) ? ' position-locked' : '');
+                    (node === this.selectedNode ? ' selected' : '');
                 // 璁＄畻瀹為檯浣嶇疆锛氬噺鍘讳竴鍗婄殑瀹藉害鍜岄珮搴︽潵灞呬腑
                 el.style.left = (node.x - node.width / 2) + 'px';
                 el.style.top = (node.y - node.height / 2) + 'px';
@@ -282,13 +283,26 @@
                 content.contentEditable = false;
                 content.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    this.selectNode(node);
+                    if (!this.isDragging && !this.isDraggingLink && !this.isDraggingNode) {
+                        this.handleNodeClick(node);
+                    }
                 });
                 content.addEventListener('dblclick', (e) => {
                     e.stopPropagation();
-                    this.startEditing(node, content);
+                    this.handleNodeClick(node);
                 });
                 el.appendChild(content);
+
+                if (node.children.length > 0) {
+                    const expandBtn = document.createElement('div');
+                    expandBtn.className = 'expand-btn';
+                    expandBtn.textContent = node.expanded ? '-' : '+';
+                    expandBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        this.toggleNode(node);
+                    };
+                    el.appendChild(expandBtn);
+                }
 
                 // 鍒涘缓鎮诞娣诲姞鎸夐挳瀹瑰櫒
                 const addBtnContainer = document.createElement('div');
@@ -391,13 +405,13 @@
 
                 el.addEventListener('click', (e) => {
                     if (!this.isDragging && !this.isDraggingLink && !this.isDraggingNode) {
-                        this.selectNode(node);
+                        this.handleNodeClick(node);
                     }
                 });
 
                 el.addEventListener('dblclick', (e) => {
                     e.stopPropagation();
-                    this.startEditing(node, content);
+                    this.handleNodeClick(node);
                 });
 
                 // 鑺傜偣鎷栧姩浜嬩欢
@@ -416,6 +430,7 @@
             }
 
             startDragNode(node, e) {
+                if (this.isReadMode()) return;
                 if (node === this.rootNode) return; // 鏍硅妭鐐逛笉鍏佽鎷栧姩
 
                 this.isDraggingNode = true;
@@ -449,15 +464,11 @@
                 this.draggedNode.x = mouseX - this.dragNodeOffsetX;
                 this.draggedNode.y = mouseY - this.dragNodeOffsetY;
 
-                // 閿佸畾璇ヨ妭鐐逛綅缃紝闃叉鑷姩甯冨眬瑕嗙洊
-                this.lockedNodes.add(this.draggedNode.id);
-
                 // 鏇存柊DOM浣嶇疆
                 const el = document.querySelector(`[data-node-id="${this.draggedNode.id}"]`);
                 if (el) {
                     el.style.left = (this.draggedNode.x - this.draggedNode.width / 2) + 'px';
                     el.style.top = (this.draggedNode.y - this.draggedNode.height / 2) + 'px';
-                    el.classList.add('position-locked');
                 }
 
                 // 閲嶆柊娓叉煋杩炴帴绾?
@@ -474,21 +485,15 @@
                 this.draggedNode = null;
             }
 
-            toggleNodeLock(node) {
-                if (this.lockedNodes.has(node.id)) {
-                    this.lockedNodes.delete(node.id);
-                    this.showToast('已解锁节点位置');
-                } else {
-                    this.lockedNodes.add(node.id);
-                    this.showToast('已锁定节点位置');
-                }
-                this.renderNodes();
+            resetAllNodePositions() {
+                this.render();
+                this.showToast('已重置布局');
             }
 
-            resetAllNodePositions() {
-                this.lockedNodes.clear();
+            autoAlign() {
                 this.render();
-                this.showToast('已重置所有节点位置');
+                this.renderConnections();
+                this.showToast('已自动对齐');
             }
 
             bindConnectionHandle(handle, node, position) {
@@ -536,6 +541,37 @@
                 return path;
             }
 
+            getNodeAnchor(node, side) {
+                switch (side) {
+                    case 'left':
+                        return { x: node.x - node.width / 2, y: node.y };
+                    case 'top':
+                        return { x: node.x, y: node.y - node.height / 2 };
+                    case 'bottom':
+                        return { x: node.x, y: node.y + node.height / 2 };
+                    case 'right':
+                    default:
+                        return { x: node.x + node.width / 2, y: node.y };
+                }
+            }
+
+            getNearestSide(node, pointX, pointY) {
+                const sides = ['left', 'right', 'top', 'bottom'];
+                let nearestSide = 'left';
+                let nearestDist2 = Infinity;
+                for (const side of sides) {
+                    const p = this.getNodeAnchor(node, side);
+                    const dx = p.x - pointX;
+                    const dy = p.y - pointY;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < nearestDist2) {
+                        nearestDist2 = d2;
+                        nearestSide = side;
+                    }
+                }
+                return nearestSide;
+            }
+
             // ==================== 鍏宠仈绾垮姛鑳?====================
             renderLinks() {
                 for (const link of this.links) {
@@ -556,11 +592,14 @@
                 }
                 path.dataset.linkId = link.id;
 
-                // 璁＄畻杩炴帴鐐癸紙浠庢簮鑺傜偣鍙充晶鍒扮洰鏍囪妭鐐瑰乏渚э級
-                const startX = source.x + source.width / 2;
-                const startY = source.y;
-                const endX = target.x - target.width / 2;
-                const endY = target.y;
+                const sourceSide = link.sourceSide || 'right';
+                const targetSide = link.targetSide || 'left';
+                const start = this.getNodeAnchor(source, sourceSide);
+                const end = this.getNodeAnchor(target, targetSide);
+                const startX = start.x;
+                const startY = start.y;
+                const endX = end.x;
+                const endY = end.y;
 
                 // 浣跨敤璐濆灏旀洸绾?
                 const controlOffset = Math.abs(endX - startX) * 0.5;
@@ -583,8 +622,9 @@
                     path.classList.add('dragging-link');
 
                     const source = this.dragLinkSource;
-                    const startX = source.x + source.width / 2;
-                    const startY = source.y;
+                    const start = this.getNodeAnchor(source, this.dragLinkSourceSide || 'right');
+                    const startX = start.x;
+                    const startY = start.y;
                     const endX = this.dragLinkCurrentPos.x;
                     const endY = this.dragLinkCurrentPos.y;
 
@@ -597,8 +637,10 @@
             }
 
             startDragLink(node, position, e) {
+                if (this.isReadMode()) return;
                 this.isDraggingLink = true;
                 this.dragLinkSource = node;
+                this.dragLinkSourceSide = position || 'right';
                 this.dragLinkStartPos = { x: node.x, y: node.y };
 
                 // 杞崲榧犳爣鍧愭爣鍒扮敾甯冨潗鏍?
@@ -628,7 +670,17 @@
                     );
 
                     if (!existingLink) {
-                        this.addLink(this.dragLinkSource.id, targetNode.id);
+                        const targetSide = this.getNearestSide(
+                            targetNode,
+                            this.dragLinkCurrentPos.x,
+                            this.dragLinkCurrentPos.y
+                        );
+                        this.addLink(
+                            this.dragLinkSource.id,
+                            targetNode.id,
+                            this.dragLinkSourceSide || 'right',
+                            targetSide
+                        );
                         this.showToast('已创建关联');
                     } else {
                         this.showToast('关联已存在');
@@ -637,6 +689,7 @@
 
                 this.isDraggingLink = false;
                 this.dragLinkSource = null;
+                this.dragLinkSourceSide = 'right';
                 this.dragLinkStartPos = null;
                 this.dragLinkCurrentPos = null;
                 this.canvasContainer.style.cursor = '';
@@ -665,8 +718,8 @@
                 return null;
             }
 
-            addLink(sourceId, targetId) {
-                const link = new NodeLink(this.linkIdCounter++, sourceId, targetId);
+            addLink(sourceId, targetId, sourceSide = 'right', targetSide = 'left') {
+                const link = new NodeLink(this.linkIdCounter++, sourceId, targetId, sourceSide, targetSide);
                 this.links.push(link);
                 this.renderConnections();
             }
@@ -688,6 +741,7 @@
             }
 
             deleteSelectedLink() {
+                if (this.isReadMode()) return;
                 if (!this.selectedLink) return;
 
                 const index = this.links.indexOf(this.selectedLink);
@@ -735,12 +789,35 @@
                 }
             }
 
+            editSelectedNode() {
+                if (!this.selectedNode || this.isReadMode()) return;
+                const el = document.querySelector(`[data-node-id="${this.selectedNode.id}"] .node-content`);
+                if (el) this.startEditing(this.selectedNode, el);
+            }
+
+            handleNodeClick(node) {
+                if (this.isReadMode()) {
+                    this.selectNode(node);
+                    return;
+                }
+                const activeEl = document.activeElement;
+                if (activeEl && activeEl.classList && activeEl.classList.contains('node-content')) {
+                    return;
+                }
+                if (this.selectedNode === node) {
+                    this.editSelectedNode();
+                    return;
+                }
+                this.selectNode(node);
+            }
+
             toggleNode(node) {
                 node.expanded = !node.expanded;
                 this.render();
             }
 
             startEditing(node, contentEl) {
+                if (this.isReadMode()) return;
                 contentEl.contentEditable = true;
                 contentEl.focus();
 
@@ -795,6 +872,7 @@
             }
 
             addChildNode() {
+                if (this.isReadMode()) return;
                 if (!this.selectedNode) {
                     this.showToast('请先选择一个节点');
                     return;
@@ -802,7 +880,12 @@
 
                 const newNode = this.selectedNode.addChild('新节点');
                 this.selectedNode.expanded = true;
-                this.render();
+                const childCount = this.selectedNode.children.length;
+                newNode.x = this.selectedNode.x + this.selectedNode.width + this.NODE_HORIZONTAL_GAP;
+                newNode.y = this.selectedNode.y + (childCount - 1) * this.AUTO_NEW_NODE_OFFSET_Y;
+                this.renderNodes();
+                this.renderConnections();
+                this.updateTransform();
                 this.selectNode(newNode);
 
                 setTimeout(() => {
@@ -812,6 +895,7 @@
             }
 
             addSiblingNode() {
+                if (this.isReadMode()) return;
                 if (!this.selectedNode) {
                     this.showToast('请先选择一个节点');
                     return;
@@ -823,7 +907,11 @@
                 }
 
                 const newNode = this.selectedNode.parent.addChild('新节点');
-                this.render();
+                newNode.x = this.selectedNode.x;
+                newNode.y = this.selectedNode.y + this.AUTO_NEW_NODE_OFFSET_Y;
+                this.renderNodes();
+                this.renderConnections();
+                this.updateTransform();
                 this.selectNode(newNode);
 
                 setTimeout(() => {
@@ -833,6 +921,7 @@
             }
 
             deleteNode() {
+                if (this.isReadMode()) return;
                 if (!this.selectedNode) {
                     this.showToast('请先选择一个节点');
                     return;
@@ -913,7 +1002,9 @@
                     links: this.links.map(link => ({
                         id: link.id,
                         sourceId: link.sourceId,
-                        targetId: link.targetId
+                        targetId: link.targetId,
+                        sourceSide: link.sourceSide || 'right',
+                        targetSide: link.targetSide || 'left'
                     })),
                     view: {
                         scale: this.scale,
@@ -932,6 +1023,129 @@
                 this.showToast('已导出');
             }
 
+            getVisibleNodes(node = this.rootNode, acc = []) {
+                if (!node) return acc;
+                acc.push(node);
+                if (node.expanded) {
+                    for (const child of node.children) {
+                        this.getVisibleNodes(child, acc);
+                    }
+                }
+                return acc;
+            }
+
+            exportImage(format = 'png') {
+                const visibleNodes = this.getVisibleNodes();
+                if (!visibleNodes.length) return;
+
+                let minX = Infinity;
+                let minY = Infinity;
+                let maxX = -Infinity;
+                let maxY = -Infinity;
+
+                for (const node of visibleNodes) {
+                    minX = Math.min(minX, node.x - node.width / 2);
+                    minY = Math.min(minY, node.y - node.height / 2);
+                    maxX = Math.max(maxX, node.x + node.width / 2);
+                    maxY = Math.max(maxY, node.y + node.height / 2);
+                }
+
+                const padding = 48;
+                const width = Math.max(1, Math.ceil(maxX - minX + padding * 2));
+                const height = Math.max(1, Math.ceil(maxY - minY + padding * 2));
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
+                const isJpeg = format === 'jpeg';
+                ctx.fillStyle = isJpeg ? '#0f172a' : 'rgba(0,0,0,0)';
+                ctx.fillRect(0, 0, width, height);
+
+                const offsetX = padding - minX;
+                const offsetY = padding - minY;
+
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                const drawTreeConnections = (node) => {
+                    if (!node.expanded) return;
+                    for (const child of node.children) {
+                        const startX = node.x + node.width / 2 + offsetX;
+                        const startY = node.y + offsetY;
+                        const endX = child.x - child.width / 2 + offsetX;
+                        const endY = child.y + offsetY;
+                        const midX = (startX + endX) / 2;
+                        ctx.strokeStyle = '#818cf8';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(startX, startY);
+                        ctx.bezierCurveTo(midX, startY, midX, endY, endX, endY);
+                        ctx.stroke();
+                        drawTreeConnections(child);
+                    }
+                };
+                drawTreeConnections(this.rootNode);
+
+                for (const link of this.links) {
+                    const source = this.nodeMap.get(link.sourceId);
+                    const target = this.nodeMap.get(link.targetId);
+                    if (!source || !target) continue;
+                    const startX = source.x + source.width / 2 + offsetX;
+                    const startY = source.y + offsetY;
+                    const endX = target.x - target.width / 2 + offsetX;
+                    const endY = target.y + offsetY;
+                    const controlOffset = Math.abs(endX - startX) * 0.5;
+                    ctx.strokeStyle = '#22d3ee';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.bezierCurveTo(startX + controlOffset, startY, endX - controlOffset, endY, endX, endY);
+                    ctx.stroke();
+                }
+
+                for (const node of visibleNodes) {
+                    const x = node.x - node.width / 2 + offsetX;
+                    const y = node.y - node.height / 2 + offsetY;
+                    const r = 12;
+
+                    ctx.fillStyle = node === this.rootNode ? 'rgba(99,102,241,0.3)' : 'rgba(30,41,59,0.9)';
+                    ctx.strokeStyle = node === this.rootNode ? 'rgba(99,102,241,0.7)' : 'rgba(148,163,184,0.3)';
+                    ctx.lineWidth = 1.5;
+
+                    ctx.beginPath();
+                    ctx.moveTo(x + r, y);
+                    ctx.lineTo(x + node.width - r, y);
+                    ctx.quadraticCurveTo(x + node.width, y, x + node.width, y + r);
+                    ctx.lineTo(x + node.width, y + node.height - r);
+                    ctx.quadraticCurveTo(x + node.width, y + node.height, x + node.width - r, y + node.height);
+                    ctx.lineTo(x + r, y + node.height);
+                    ctx.quadraticCurveTo(x, y + node.height, x, y + node.height - r);
+                    ctx.lineTo(x, y + r);
+                    ctx.quadraticCurveTo(x, y, x + r, y);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#f1f5f9';
+                    ctx.font = node === this.rootNode ? '600 18px Segoe UI' : '400 14px Segoe UI';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(node.text || '', node.x + offsetX, node.y + offsetY);
+                }
+
+                const mime = isJpeg ? 'image/jpeg' : 'image/png';
+                const quality = isJpeg ? 0.92 : undefined;
+                const url = canvas.toDataURL(mime, quality);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `mindmap_${new Date().getTime()}.${isJpeg ? 'jpeg' : 'png'}`;
+                a.click();
+                this.showToast(`已导出 ${isJpeg ? 'JPEG' : 'PNG'}`);
+            }
+
             serializeNode(node) {
                 return {
                     id: node.id,
@@ -942,6 +1156,7 @@
             }
 
             importJSON(event) {
+                if (this.isReadMode()) return;
                 const file = event.target.files[0];
                 if (!file) return;
 
@@ -973,7 +1188,13 @@
                 // 鍔犺浇鍏宠仈绾?
                 if (data.links) {
                     for (const linkData of data.links) {
-                        const link = new NodeLink(linkData.id, linkData.sourceId, linkData.targetId);
+                        const link = new NodeLink(
+                            linkData.id,
+                            linkData.sourceId,
+                            linkData.targetId,
+                            linkData.sourceSide || 'right',
+                            linkData.targetSide || 'left'
+                        );
                         this.links.push(link);
                         this.linkIdCounter = Math.max(this.linkIdCounter, linkData.id + 1);
                     }
@@ -1048,6 +1269,17 @@
             }
 
             handleKeyDown(e) {
+                if (e.ctrlKey && e.key === '1') {
+                    e.preventDefault();
+                    this.setMode('read');
+                    return;
+                }
+                if (e.ctrlKey && e.key === '2') {
+                    e.preventDefault();
+                    this.setMode('edit');
+                    return;
+                }
+
                 // 甯姪
                 if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
                     e.preventDefault();
@@ -1056,20 +1288,19 @@
                 }
 
                 // F2 缂栬緫
-                if (e.key === 'F2' && this.selectedNode) {
+                if (!this.isReadMode() && e.key === 'F2' && this.selectedNode) {
                     e.preventDefault();
-                    const el = document.querySelector(`[data-node-id="${this.selectedNode.id}"] .node-content`);
-                    if (el) this.startEditing(this.selectedNode, el);
+                    this.editSelectedNode();
                 }
 
                 // Tab 娣诲姞瀛愯妭鐐?
-                if (e.key === 'Tab' && this.selectedNode) {
+                if (!this.isReadMode() && e.key === 'Tab' && this.selectedNode) {
                     e.preventDefault();
                     this.addChildNode();
                 }
 
                 // Enter 娣诲姞鍏勫紵鑺傜偣
-                if (e.key === 'Enter' && this.selectedNode && !e.shiftKey) {
+                if (!this.isReadMode() && e.key === 'Enter' && this.selectedNode && !e.shiftKey) {
                     const activeEl = document.activeElement;
                     if (!activeEl || !activeEl.classList.contains('node-content')) {
                         e.preventDefault();
@@ -1078,7 +1309,7 @@
                 }
 
                 // Delete 鍒犻櫎鑺傜偣鎴栧叧鑱旂嚎
-                if (e.key === 'Delete') {
+                if (!this.isReadMode() && e.key === 'Delete') {
                     const activeEl = document.activeElement;
                     if (!activeEl || !activeEl.classList.contains('node-content')) {
                         e.preventDefault();
@@ -1094,18 +1325,6 @@
                 if (e.ctrlKey && e.key === 's') {
                     e.preventDefault();
                     this.exportJSON();
-                }
-
-                // Ctrl+L 閿佸畾/瑙ｉ攣鑺傜偣浣嶇疆
-                if (e.ctrlKey && e.key === 'l' && this.selectedNode) {
-                    e.preventDefault();
-                    this.toggleNodeLock(this.selectedNode);
-                }
-
-                // Ctrl+Shift+R 閲嶇疆鎵€鏈夎妭鐐逛綅缃?
-                if (e.ctrlKey && e.shiftKey && e.key === 'R') {
-                    e.preventDefault();
-                    this.resetAllNodePositions();
                 }
 
                 // Space 鍑嗗鎷栨嫿
@@ -1175,6 +1394,7 @@
         // ==================== 鍏ㄥ眬鍑芥暟 ====================
         let mindMap;
         let shortcutsVisible = false;
+        let exportMenuVisible = false;
 
         function toggleShortcuts() {
             shortcutsVisible = !shortcutsVisible;
@@ -1197,6 +1417,19 @@
             window.mindMap = mindMap;
         }
 
+        function hideExportMenu() {
+            exportMenuVisible = false;
+            const menu = document.getElementById('exportMenu');
+            if (menu) menu.classList.remove('visible');
+        }
+
+        function toggleExportMenu() {
+            exportMenuVisible = !exportMenuVisible;
+            const menu = document.getElementById('exportMenu');
+            if (!menu) return;
+            menu.classList.toggle('visible', exportMenuVisible);
+        }
+
         MindMap.instance = null;
 
         if (document.readyState === 'loading') {
@@ -1204,4 +1437,13 @@
         } else {
             bootMindMap();
         }
+
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('exportMenu');
+            if (!menu || !exportMenuVisible) return;
+            const wrapper = menu.parentElement;
+            if (wrapper && !wrapper.contains(e.target)) {
+                hideExportMenu();
+            }
+        });
     

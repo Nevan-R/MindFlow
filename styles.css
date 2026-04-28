@@ -134,6 +134,50 @@
             height: 16px;
         }
 
+        .export-dropdown {
+            position: relative;
+        }
+
+        .export-menu {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            min-width: 140px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+            padding: 6px;
+            display: none;
+            z-index: 3000;
+            backdrop-filter: blur(20px);
+        }
+
+        .export-menu.visible {
+            display: block;
+        }
+
+        .export-menu-item {
+            width: 100%;
+            border: none;
+            background: transparent;
+            color: var(--text);
+            text-align: left;
+            padding: 8px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .export-menu-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .toolbar-btn.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+        }
+
         /* 鐢诲竷瀹瑰櫒 */
         .canvas-container {
             position: absolute;
@@ -246,13 +290,13 @@
 
         .node:hover {
             box-shadow: 0 8px 32px rgba(99, 102, 241, 0.2);
-            z-index: 120;
+            z-index: 4000;
         }
 
         .node.selected {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3), 0 8px 32px rgba(99, 102, 241, 0.3);
-            z-index: 130;
+            z-index: 4100;
         }
 
         .node.selected::before {
@@ -282,6 +326,8 @@
             color: var(--text);
             white-space: nowrap;
             min-width: 60px;
+            user-select: text;
+            -webkit-user-select: text;
         }
 
         .node-content:empty::before {
@@ -291,6 +337,15 @@
 
         .add-btn-container {
             pointer-events: none;
+        }
+
+        body.read-mode .add-btn-container,
+        body.read-mode .connection-handle {
+            display: none !important;
+        }
+
+        body.read-mode .toolbar-btn.edit-only {
+            display: none !important;
         }
 
         /* 灞曞紑/鎶樺彔鎸夐挳 */
@@ -308,15 +363,18 @@
             font-size: 12px;
             font-weight: bold;
             color: var(--primary);
-            z-index: 20;
+            z-index: 5000;
             transition: all 0.2s;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            right: -11px;
+            top: 50%;
+            transform: translateY(-50%);
         }
 
         .expand-btn:hover {
             background: var(--primary);
             color: white;
-            transform: scale(1.1);
+            transform: translateY(-50%) scale(1.1);
         }
 
         /* 鎮诞娣诲姞鑺傜偣鎸夐挳 */
