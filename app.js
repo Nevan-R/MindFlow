@@ -251,6 +251,13 @@
                 this.updateTransform();
             }
 
+            renderWithoutLayout() {
+                this.renderNodes();
+                this.renderConnections();
+                this.updateTransform();
+                this.updateSelectionInfo();
+            }
+
             renderNodes() {
                 this.nodesContainer.innerHTML = '';
                 this.renderNodeRecursive(this.rootNode, this.nodesContainer);
@@ -481,6 +488,11 @@
                 const el = document.querySelector(`[data-node-id="${this.draggedNode.id}"]`);
                 if (el) el.classList.remove('dragging');
 
+                // Persist sibling order based on vertical placement after drag.
+                if (this.draggedNode.parent) {
+                    this.sortSiblingsByY(this.draggedNode.parent);
+                }
+
                 this.isDraggingNode = false;
                 this.draggedNode = null;
             }
@@ -491,9 +503,28 @@
             }
 
             autoAlign() {
+                // Keep current user-defined top/bottom sibling ordering before layout.
+                this.normalizeSiblingOrderRecursive(this.rootNode);
                 this.render();
                 this.renderConnections();
                 this.showToast('已自动对齐');
+            }
+
+            sortSiblingsByY(parentNode) {
+                if (!parentNode || !Array.isArray(parentNode.children)) return;
+                parentNode.children.sort((a, b) => {
+                    const dy = a.y - b.y;
+                    if (Math.abs(dy) > 0.001) return dy;
+                    return a.id - b.id;
+                });
+            }
+
+            normalizeSiblingOrderRecursive(node) {
+                if (!node || !node.children || node.children.length === 0) return;
+                this.sortSiblingsByY(node);
+                for (const child of node.children) {
+                    this.normalizeSiblingOrderRecursive(child);
+                }
             }
 
             bindConnectionHandle(handle, node, position) {
@@ -534,8 +565,19 @@
                 const endX = child.x - child.width / 2;
                 const endY = child.y;
 
-                const midX = (startX + endX) / 2;
-                const d = `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
+                const dx = endX - startX;
+                const dy = endY - startY;
+                let d = '';
+                if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
+                    // Avoid degenerate zero-length path that can disappear.
+                    d = `M ${startX} ${startY} L ${startX + 0.1} ${startY}`;
+                } else if (Math.abs(dy) < 0.5) {
+                    // Keep purely horizontal links visible and crisp.
+                    d = `M ${startX} ${startY} L ${endX} ${endY}`;
+                } else {
+                    const controlOffset = Math.max(24, Math.abs(dx) * 0.5);
+                    d = `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
+                }
 
                 path.setAttribute('d', d);
                 return path;
@@ -552,6 +594,20 @@
                     case 'right':
                     default:
                         return { x: node.x + node.width / 2, y: node.y };
+                }
+            }
+
+            getSideDirection(side) {
+                switch (side) {
+                    case 'left':
+                        return { x: -1, y: 0 };
+                    case 'top':
+                        return { x: 0, y: -1 };
+                    case 'bottom':
+                        return { x: 0, y: 1 };
+                    case 'right':
+                    default:
+                        return { x: 1, y: 0 };
                 }
             }
 
@@ -601,9 +657,17 @@
                 const endX = end.x;
                 const endY = end.y;
 
-                // 浣跨敤璐濆灏旀洸绾?
-                const controlOffset = Math.abs(endX - startX) * 0.5;
-                const d = `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
+                const dx = endX - startX;
+                const dy = endY - startY;
+                const dist = Math.hypot(dx, dy);
+                const controlLen = Math.max(30, Math.min(120, dist * 0.45));
+                const sDir = this.getSideDirection(sourceSide);
+                const tDir = this.getSideDirection(targetSide);
+                const c1x = startX + sDir.x * controlLen;
+                const c1y = startY + sDir.y * controlLen;
+                const c2x = endX + tDir.x * controlLen;
+                const c2y = endY + tDir.y * controlLen;
+                const d = `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`;
 
                 path.setAttribute('d', d);
                 path.setAttribute('marker-end', link === this.selectedLink ? 'url(#arrowhead-selected)' : 'url(#arrowhead)');
@@ -628,8 +692,16 @@
                     const endX = this.dragLinkCurrentPos.x;
                     const endY = this.dragLinkCurrentPos.y;
 
-                    const controlOffset = Math.abs(endX - startX) * 0.5;
-                    const d = `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
+                    const dx = endX - startX;
+                    const dy = endY - startY;
+                    const dist = Math.hypot(dx, dy);
+                    const controlLen = Math.max(24, Math.min(100, dist * 0.45));
+                    const sDir = this.getSideDirection(this.dragLinkSourceSide || 'right');
+                    const c1x = startX + sDir.x * controlLen;
+                    const c1y = startY + sDir.y * controlLen;
+                    const c2x = endX - sDir.x * (controlLen * 0.6);
+                    const c2y = endY - sDir.y * (controlLen * 0.6);
+                    const d = `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`;
 
                     path.setAttribute('d', d);
                     this.connectionsSvg.appendChild(path);
@@ -843,14 +915,14 @@
                         nodeEl.style.whiteSpace = 'nowrap';
                         nodeEl.style.minWidth = '';
                         contentEl.style.whiteSpace = 'nowrap';
-                        this.render();
+                        this.renderWithoutLayout();
                         this.showToast('已保存');
                     } else {
                         contentEl.textContent = node.text;
                         nodeEl.style.whiteSpace = 'nowrap';
                         nodeEl.style.minWidth = '';
                         contentEl.style.whiteSpace = 'nowrap';
-                        this.render();
+                        this.renderWithoutLayout();
                     }
                 };
 
@@ -866,7 +938,7 @@
                         nodeEl.style.minWidth = '';
                         contentEl.style.whiteSpace = 'nowrap';
                         contentEl.blur();
-                        this.render();
+                        this.renderWithoutLayout();
                     }
                 });
             }
@@ -880,6 +952,7 @@
 
                 const newNode = this.selectedNode.addChild('新节点');
                 this.selectedNode.expanded = true;
+                this.calculateNodeSizes(newNode);
                 const childCount = this.selectedNode.children.length;
                 newNode.x = this.selectedNode.x + this.selectedNode.width + this.NODE_HORIZONTAL_GAP;
                 newNode.y = this.selectedNode.y + (childCount - 1) * this.AUTO_NEW_NODE_OFFSET_Y;
@@ -907,6 +980,7 @@
                 }
 
                 const newNode = this.selectedNode.parent.addChild('新节点');
+                this.calculateNodeSizes(newNode);
                 newNode.x = this.selectedNode.x;
                 newNode.y = this.selectedNode.y + this.AUTO_NEW_NODE_OFFSET_Y;
                 this.renderNodes();
@@ -1382,12 +1456,28 @@
             }
 
             handleWheel(e) {
-                if (e.ctrlKey || e.metaKey) {
-                    e.preventDefault();
-                    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-                    this.scale = Math.max(0.3, Math.min(3, this.scale * delta));
-                    this.updateTransform();
-                }
+                e.preventDefault();
+                const containerRect = this.canvasContainer.getBoundingClientRect();
+                const mouseX = e.clientX - containerRect.left;
+                const mouseY = e.clientY - containerRect.top;
+                const base = this.CANVAS_OFFSET;
+
+                // Classic canvas zoom with canvas base offset (-CANVAS_OFFSET in CSS):
+                // screen = -base + translate + world * scale
+                // => world = (screen + base - translate) / scale
+                const worldX = (mouseX + base - this.translateX) / this.scale;
+                const worldY = (mouseY + base - this.translateY) / this.scale;
+
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                const newScale = Math.max(0.3, Math.min(3, this.scale * delta));
+                if (newScale === this.scale) return;
+                this.scale = newScale;
+
+                // keep mouse anchored after scaling:
+                // translate = screen + base - world * scale
+                this.translateX = mouseX + base - worldX * this.scale;
+                this.translateY = mouseY + base - worldY * this.scale;
+                this.updateTransform();
             }
         }
 

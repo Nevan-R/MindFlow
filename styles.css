@@ -477,8 +477,10 @@
 
         path.connection {
             fill: none;
-            stroke: url(#gradient);
+            stroke: var(--primary-light);
             stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
             opacity: 1;
             transition: none;
             pointer-events: stroke;
